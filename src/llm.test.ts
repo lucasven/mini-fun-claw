@@ -131,7 +131,7 @@ describe('chat', () => {
     expect(result!.content).toBe('Fallback response');
   });
 
-  it('returns empty content as a valid response (model chose not to answer)', async () => {
+  it('treats empty content as model choosing not to respond', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -143,7 +143,7 @@ describe('chat', () => {
     const result = await chat(baseOptions);
     expect(result).not.toBeNull();
     expect(result!.content).toBe('');
-    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalledTimes(1); // does NOT try next model
   });
 
   it('falls back on fetch error (network)', async () => {

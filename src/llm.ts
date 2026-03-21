@@ -120,7 +120,7 @@ export async function chat(options: ChatOptions): Promise<LlmResponse | null> {
           body: JSON.stringify({
             model: model.id,
             messages,
-            max_tokens: 50,
+            max_tokens: 150,
             temperature: 0.7,
           }),
         },
@@ -156,7 +156,8 @@ export async function chat(options: ChatOptions): Promise<LlmResponse | null> {
 
       const content = data.choices?.[0]?.message?.content?.trim();
       if (!content) {
-        // Empty response = the model chose not to answer — respect that
+        // Model received the prompt and chose not to respond — respect that
+        console.log(`🤐 ${model.name} chose not to respond`);
         return { content: '', model: model.id };
       }
 
