@@ -35,7 +35,7 @@ const FREE_MODELS: FreeModel[] = [
 
 const RETRYABLE_STATUS_CODES = [429, 503, 502, 500];
 const REQUEST_TIMEOUT_MS = 30_000;
-const COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes cooldown after 429
+const COOLDOWN_MS = 30_000; // 30s cooldown after 429 (free models recover fast)
 
 /** Track models that returned 429 recently — skip them to save time */
 const cooldownMap = new Map<string, number>();
@@ -95,6 +95,12 @@ export async function chat(options: ChatOptions): Promise<LlmResponse | null> {
   // Add current user message
   messages.push({ role: 'user', content: userMessage });
 
+  // If ALL models are on cooldown, clear cooldowns so we still try
+  if (models.every((m) => isOnCooldown(m.id))) {
+    cooldownMap.clear();
+    console.log('🔄 All models on cooldown — clearing cooldowns and retrying');
+  }
+
   for (const model of models) {
     // Skip models on cooldown (recently returned 429)
     if (isOnCooldown(model.id)) {
@@ -123,7 +129,7 @@ export async function chat(options: ChatOptions): Promise<LlmResponse | null> {
 
       if (response.status === 429) {
         setCooldown(model.id);
-        console.warn(`⚠️  ${model.name} → 429, cooldown 2min`);
+        console.warn(`⚠️  ${model.name} → 429, cooldown 30s`);
         continue;
       }
 
@@ -150,8 +156,8 @@ export async function chat(options: ChatOptions): Promise<LlmResponse | null> {
 
       const content = data.choices?.[0]?.message?.content?.trim();
       if (!content) {
-        console.warn(`⚠️  ${model.name} empty response`);
-        continue;
+        // Empty response = the model chose not to answer — respect that
+        return { content: '', model: model.id };
       }
 
       return { content, model: model.id };

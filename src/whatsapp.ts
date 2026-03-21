@@ -237,7 +237,7 @@ async function handleMessage(
 
   // Check if LLM decided to skip this message
   const trimmedResponse = response.content.trim();
-  if (trimmedResponse === '[SKIP]' || trimmedResponse.toLowerCase() === '[skip]') {
+  if (!trimmedResponse || trimmedResponse === '[SKIP]' || trimmedResponse.toLowerCase() === '[skip]') {
     console.log(`⏭️  [${jid}] Skipped (LLM chose not to respond)`);
     return;
   }
