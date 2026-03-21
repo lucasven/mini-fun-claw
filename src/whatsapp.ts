@@ -29,7 +29,6 @@ export async function startBot(config: Config): Promise<void> {
     const sock: WASocket = makeWASocket({
       auth: state,
       logger,
-      printQRInTerminal: true,
       browser: ['Mini Fun Claw', 'Chrome', '1.0.0'],
     });
 
@@ -38,7 +37,12 @@ export async function startBot(config: Config): Promise<void> {
     sock.ev.on(
       'connection.update',
       (update: BaileysEventMap['connection.update']) => {
-        const { connection, lastDisconnect } = update;
+        const { connection, lastDisconnect, qr } = update;
+
+        if (qr) {
+          console.log('📱 Scan this QR code with WhatsApp:');
+          import('qrcode-terminal').then((mod) => mod.default.generate(qr, { small: true }));
+        }
 
         if (connection === 'close') {
           const reason = (lastDisconnect?.error as Boom)?.output?.statusCode;
