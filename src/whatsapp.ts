@@ -16,7 +16,9 @@ import { chat } from './llm.js';
 const AUTH_DIR = 'auth_state';
 
 export async function startBot(config: Config): Promise<void> {
-  const logger = pino({ level: config.logLevel });
+  // Silent Baileys logger — its default output is extremely verbose (history sync, pre-keys, etc)
+  // App-level logging is done via console.log with clear formatting
+  const logger = pino({ level: 'silent' });
 
   const persona = loadPersona();
   const systemPrompt = buildSystemPrompt(persona);
@@ -117,6 +119,16 @@ async function handleMessage(
 
   // Ignore DMs — only groups
   if (!isGroupMessage(jid)) return;
+
+  // Discovery mode: log group JIDs clearly when whitelist is empty
+  if (config.groupWhitelist.length === 0) {
+    const sender = msg.key.participant || msg.key.remoteJid || 'unknown';
+    console.log(`\n📍 GROUP MESSAGE DETECTED`);
+    console.log(`   JID: ${jid}`);
+    console.log(`   From: ${sender}`);
+    console.log(`   ➡️  Add this to .env: GROUP_WHITELIST=${jid}\n`);
+    return;
+  }
 
   // Ignore non-whitelisted groups
   if (!isGroupAllowed(jid, config.groupWhitelist)) return;
