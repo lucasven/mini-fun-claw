@@ -14,6 +14,26 @@ import { buildSystemPrompt, loadPersona } from './persona.js';
 import { chat } from './llm.js';
 
 const AUTH_DIR = 'auth_state';
+const MAX_HISTORY = 15;
+
+/** In-memory conversation history per group */
+const groupHistory = new Map<string, Array<{ role: 'user' | 'assistant'; name?: string; content: string }>>();
+
+function pushHistory(groupJid: string, role: 'user' | 'assistant', content: string, name?: string): void {
+  if (!groupHistory.has(groupJid)) {
+    groupHistory.set(groupJid, []);
+  }
+  const history = groupHistory.get(groupJid)!;
+  history.push({ role, content, ...(name ? { name } : {}) });
+  // Keep only the last MAX_HISTORY messages
+  while (history.length > MAX_HISTORY) {
+    history.shift();
+  }
+}
+
+function getHistory(groupJid: string): Array<{ role: 'user' | 'assistant'; name?: string; content: string }> {
+  return groupHistory.get(groupJid) ?? [];
+}
 
 export async function startBot(config: Config): Promise<void> {
   // Silent Baileys logger — its default output is extremely verbose (history sync, pre-keys, etc)
@@ -141,14 +161,25 @@ async function handleMessage(
   const { respond, cleanText } = shouldRespond(text, config.botPrefix);
   if (!respond || !cleanText) return;
 
-  console.log(`📩 [${jid}] ${msg.key.participant ?? 'unknown'}: ${cleanText.slice(0, 100)}`);
+  const senderName = (msg.key.participant ?? 'unknown').replace(/@.*/, '');
+  console.log(`📩 [${jid}] ${senderName}: ${cleanText.slice(0, 100)}`);
 
-  // Get LLM response
+  // Save user message to conversation history
+  pushHistory(jid, 'user', cleanText, senderName);
+
+  // Get conversation history for context
+  const history = getHistory(jid);
+
+  // Get LLM response with conversation history
   const response = await chat({
     apiKey: config.openrouterApiKey,
     systemPrompt,
     userMessage: cleanText,
+    history,
   });
+
+  // Save bot response to conversation history
+  pushHistory(jid, 'assistant', response.content);
 
   console.log(`🤖 [${response.model}] ${response.content.slice(0, 100)}`);
 

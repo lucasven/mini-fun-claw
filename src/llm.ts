@@ -45,20 +45,37 @@ interface OpenRouterMessage {
   content: string;
 }
 
+interface HistoryMessage {
+  role: 'user' | 'assistant';
+  name?: string;
+  content: string;
+}
+
 interface ChatOptions {
   apiKey: string;
   systemPrompt: string;
   userMessage: string;
   models?: FreeModel[];
+  /** Conversation history (last N messages) for multi-turn context */
+  history?: HistoryMessage[];
 }
 
 export async function chat(options: ChatOptions): Promise<LlmResponse> {
-  const { apiKey, systemPrompt, userMessage, models = FREE_MODELS } = options;
+  const { apiKey, systemPrompt, userMessage, models = FREE_MODELS, history = [] } = options;
 
+  // Build messages: system prompt + conversation history + current message
   const messages: OpenRouterMessage[] = [
     { role: 'system', content: systemPrompt },
-    { role: 'user', content: userMessage },
   ];
+
+  // Add conversation history (all except the last user message which we add separately)
+  // History already includes the current message, so we use all of it
+  for (const msg of history.slice(0, -1)) {
+    messages.push({ role: msg.role, content: msg.name ? `[${msg.name}]: ${msg.content}` : msg.content });
+  }
+
+  // Add current user message
+  messages.push({ role: 'user', content: userMessage });
 
   for (const model of models) {
     try {
