@@ -18,8 +18,8 @@ describe('loadPersona', () => {
     const emptyDir = join(testDir, 'empty');
     mkdirSync(emptyDir, { recursive: true });
     const persona = loadPersona(emptyDir);
-    expect(persona.soul).toContain('friendly AI assistant');
-    expect(persona.agents).toContain('Respostas curtas');
+    expect(persona.soul).toContain('casual member');
+    expect(persona.agents).toContain('1-2 frases');
   });
 
   it('reads SOUL.md when present', () => {

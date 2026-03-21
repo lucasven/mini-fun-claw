@@ -91,7 +91,7 @@ export async function chat(options: ChatOptions): Promise<LlmResponse> {
           body: JSON.stringify({
             model: model.id,
             messages,
-            max_tokens: 1024,
+            max_tokens: 256,
             temperature: 0.7,
           }),
         },
