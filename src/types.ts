@@ -3,6 +3,8 @@ export interface Config {
   groupWhitelist: string[];
   botPrefix: string;
   logLevel: string;
+  /** Probability of responding (0.0 to 1.0). Default 0.1 = 10% */
+  responseRate: number;
 }
 
 export interface FreeModel {

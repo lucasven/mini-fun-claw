@@ -46,6 +46,7 @@ export async function startBot(config: Config): Promise<void> {
   console.log('🤖 Mini Fun Claw starting...');
   console.log(`📋 Whitelisted groups: ${config.groupWhitelist.length}`);
   console.log(`🔤 Bot prefix: ${config.botPrefix || '(none — responds to all)'}`);
+  console.log(`🎲 Response rate: ${Math.round(config.responseRate * 100)}% (mention "${config.botPrefix || 'bot'}" to always get a response)`);
 
   const connect = async (): Promise<void> => {
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
@@ -164,8 +165,16 @@ async function handleMessage(
   const senderName = (msg.key.participant ?? 'unknown').replace(/@.*/, '');
   console.log(`📩 [${jid}] ${senderName}: ${cleanText.slice(0, 100)}`);
 
-  // Save user message to conversation history
+  // Save user message to conversation history (always, even if we skip)
   pushHistory(jid, 'user', cleanText, senderName);
+
+  // Random response gate — skip most messages to avoid dominating the group
+  // Always respond if bot name/prefix is mentioned directly in the message
+  const botMentioned = config.botPrefix && cleanText.toLowerCase().includes(config.botPrefix.toLowerCase());
+  if (!botMentioned && Math.random() > config.responseRate) {
+    console.log(`🎲 [${jid}] Skipped (random gate, rate=${config.responseRate})`);
+    return;
+  }
 
   // Get conversation history for context
   const history = getHistory(jid);

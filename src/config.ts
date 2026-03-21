@@ -19,6 +19,7 @@ export function loadConfig(): Config {
     groupWhitelist: whitelist,
     botPrefix: process.env.BOT_PREFIX ?? '',
     logLevel: process.env.LOG_LEVEL ?? 'info',
+    responseRate: Math.min(1, Math.max(0, parseFloat(process.env.RESPONSE_RATE || '0.1'))),
   };
 }
 
