@@ -109,9 +109,9 @@ describe('shouldRespond', () => {
     expect(result).toEqual({ respond: false, cleanText: '' });
   });
 
-  it('does not respond when prefix is partial match', () => {
+  it('does not respond when prefix is partial match of another word', () => {
     const result = shouldRespond('!clawback money', '!claw');
-    expect(result).toEqual({ respond: true, cleanText: 'back money' });
+    expect(result).toEqual({ respond: false, cleanText: '' });
   });
 
   it('handles leading whitespace before prefix', () => {

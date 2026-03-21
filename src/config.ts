@@ -37,8 +37,11 @@ export function shouldRespond(
 
   const lower = text.trimStart().toLowerCase();
   if (lower.startsWith(prefix.toLowerCase())) {
-    const cleanText = text.trimStart().slice(prefix.length).trim();
-    return { respond: true, cleanText };
+    const afterPrefix = text.trimStart().slice(prefix.length);
+    // Only match if prefix is followed by space, EOL, or nothing (word boundary)
+    if (afterPrefix === '' || afterPrefix.startsWith(' ')) {
+      return { respond: true, cleanText: afterPrefix.trim() };
+    }
   }
 
   return { respond: false, cleanText: '' };
