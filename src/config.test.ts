@@ -13,16 +13,24 @@ describe('loadConfig', () => {
     expect(() => loadConfig()).toThrow('OPENROUTER_API_KEY is required');
   });
 
-  it('throws when GROUP_WHITELIST is empty', () => {
+  it('returns empty whitelist with warning when GROUP_WHITELIST is empty', () => {
     process.env.OPENROUTER_API_KEY = 'sk-test';
     process.env.GROUP_WHITELIST = '';
-    expect(() => loadConfig()).toThrow('GROUP_WHITELIST must contain at least one group JID');
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    const config = loadConfig();
+    expect(config.groupWhitelist).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('GROUP_WHITELIST is empty'));
+    warnSpy.mockRestore();
   });
 
-  it('throws when GROUP_WHITELIST is missing', () => {
+  it('returns empty whitelist with warning when GROUP_WHITELIST is missing', () => {
     process.env.OPENROUTER_API_KEY = 'sk-test';
     delete process.env.GROUP_WHITELIST;
-    expect(() => loadConfig()).toThrow('GROUP_WHITELIST must contain at least one group JID');
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    const config = loadConfig();
+    expect(config.groupWhitelist).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('GROUP_WHITELIST is empty'));
+    warnSpy.mockRestore();
   });
 
   it('loads valid config', () => {

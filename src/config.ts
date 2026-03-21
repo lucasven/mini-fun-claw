@@ -10,7 +10,8 @@ export function loadConfig(): Config {
     .filter(Boolean);
 
   if (whitelist.length === 0) {
-    throw new Error('GROUP_WHITELIST must contain at least one group JID');
+    console.warn('⚠️  GROUP_WHITELIST is empty — bot will log group JIDs but NOT respond to any messages.');
+    console.warn('   Send a message in a group and check the logs for the JID, then add it to .env');
   }
 
   return {
