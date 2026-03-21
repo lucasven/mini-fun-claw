@@ -6,6 +6,7 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
+import qrcodeTerminal from 'qrcode-terminal';
 import type { Config } from './types.js';
 import { isGroupAllowed, isGroupMessage, shouldRespond } from './config.js';
 import { buildSystemPrompt, loadPersona } from './persona.js';
@@ -41,7 +42,7 @@ export async function startBot(config: Config): Promise<void> {
 
         if (qr) {
           console.log('📱 Scan this QR code with WhatsApp:');
-          import('qrcode-terminal').then((mod) => mod.default.generate(qr, { small: true }));
+          qrcodeTerminal.generate(qr, { small: true });
         }
 
         if (connection === 'close') {
