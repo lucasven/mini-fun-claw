@@ -33,6 +33,11 @@ GROUP_WHITELIST=120363000000000000@g.us
 
 # Opcional: prefixo pra ativar o bot (vazio = responde tudo)
 BOT_PREFIX=!claw
+
+# Taxa de resposta aleatória (0.0 a 1.0). Default: 0.1 = 10%
+# O bot só responde a ~10% das mensagens pra não dominar o grupo.
+# Menções diretas e replies ao bot sempre respondem (bypass).
+RESPONSE_RATE=0.1
 ```
 
 ### 3. Inicie
