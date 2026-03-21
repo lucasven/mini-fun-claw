@@ -178,6 +178,13 @@ async function handleMessage(
     history,
   });
 
+  // Check if LLM decided to skip this message
+  const trimmedResponse = response.content.trim();
+  if (trimmedResponse === '[SKIP]' || trimmedResponse.toLowerCase() === '[skip]') {
+    console.log(`⏭️  [${jid}] Skipped (LLM chose not to respond)`);
+    return;
+  }
+
   // Save bot response to conversation history
   pushHistory(jid, 'assistant', response.content);
 
