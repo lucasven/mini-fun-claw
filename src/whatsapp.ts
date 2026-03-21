@@ -94,7 +94,8 @@ export async function startBot(config: Config): Promise<void> {
 
         for (const msg of upsert.messages) {
           try {
-            await handleMessage(sock, msg, config, systemPrompt);
+            const botJid = sock.user?.id;
+            await handleMessage(sock, msg, config, systemPrompt, botJid);
           } catch (err) {
             console.error('Error handling message:', err);
           }
@@ -111,11 +112,43 @@ interface WAMessage {
     remoteJid?: string | null;
     fromMe?: boolean | null;
     participant?: string | null;
+    id?: string | null;
   };
   message?: {
     conversation?: string | null;
-    extendedTextMessage?: { text?: string | null } | null;
+    extendedTextMessage?: {
+      text?: string | null;
+      contextInfo?: {
+        /** JID of the participant whose message is being quoted */
+        participant?: string | null;
+        /** The quoted message */
+        quotedMessage?: unknown;
+      } | null;
+    } | null;
   } | null;
+}
+
+/** Check if this message is a reply to the bot */
+function isReplyToBot(msg: WAMessage, botJid: string | undefined): boolean {
+  const quotedParticipant = msg.message?.extendedTextMessage?.contextInfo?.participant;
+  if (!quotedParticipant || !botJid) return false;
+  // Compare without device suffix (e.g. 5511xxx:77@s.whatsapp.net → 5511xxx)
+  const normalize = (jid: string) => jid.split('@')[0].split(':')[0];
+  return normalize(quotedParticipant) === normalize(botJid);
+}
+
+/** Check if the bot's number is mentioned in the text */
+function isBotMentionedInText(text: string, botJid: string | undefined, prefix: string): boolean {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  // Check prefix mention
+  if (prefix && lower.includes(prefix.toLowerCase())) return true;
+  // Check @mention of bot's number
+  if (botJid) {
+    const botNumber = botJid.split('@')[0].split(':')[0];
+    if (lower.includes(`@${botNumber}`)) return true;
+  }
+  return false;
 }
 
 function extractText(msg: WAMessage): string | null {
@@ -131,6 +164,7 @@ async function handleMessage(
   msg: WAMessage,
   config: Config,
   systemPrompt: string,
+  botJid?: string,
 ): Promise<void> {
   const jid = msg.key.remoteJid;
   if (!jid) return;
@@ -168,12 +202,20 @@ async function handleMessage(
   // Save user message to conversation history (always, even if we skip)
   pushHistory(jid, 'user', cleanText, senderName);
 
+  // Bypass random gate if message is directed at the bot (reply or mention)
+  const repliedToBot = isReplyToBot(msg, botJid);
+  const mentionedBot = isBotMentionedInText(cleanText, botJid, config.botPrefix);
+  const directedAtBot = repliedToBot || mentionedBot;
+
   // Random response gate — skip most messages to avoid dominating the group
-  // Always respond if bot name/prefix is mentioned directly in the message
-  const botMentioned = config.botPrefix && cleanText.toLowerCase().includes(config.botPrefix.toLowerCase());
-  if (!botMentioned && Math.random() > config.responseRate) {
+  // Always respond if message is directed at the bot (reply, @mention, or prefix)
+  if (!directedAtBot && Math.random() > config.responseRate) {
     console.log(`🎲 [${jid}] Skipped (random gate, rate=${config.responseRate})`);
     return;
+  }
+
+  if (directedAtBot) {
+    console.log(`📌 [${jid}] Directed at bot (${repliedToBot ? 'reply' : 'mention'}) — always responding`);
   }
 
   // Get conversation history for context
@@ -199,6 +241,11 @@ async function handleMessage(
 
   console.log(`🤖 [${response.model}] ${response.content.slice(0, 100)}`);
 
-  // Send response
-  await sock.sendMessage(jid, { text: response.content }, { quoted: msg as never });
+  // Send response — only quote the original message if it was directed at the bot
+  // This prevents the bot from always replying with quote, which makes it look less spammy
+  if (directedAtBot) {
+    await sock.sendMessage(jid, { text: response.content }, { quoted: msg as never });
+  } else {
+    await sock.sendMessage(jid, { text: response.content });
+  }
 }
