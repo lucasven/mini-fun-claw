@@ -46,8 +46,8 @@ describe('chat', () => {
     });
 
     const result = await chat(baseOptions);
-    expect(result.content).toBe('Hi there!');
-    expect(result.model).toContain(':free');
+    expect(result!.content).toBe('Hi there!');
+    expect(result!.model).toContain(':free');
   });
 
   it('falls back to next model on 429', async () => {
@@ -68,7 +68,7 @@ describe('chat', () => {
     });
 
     const result = await chat(baseOptions);
-    expect(result.content).toBe('From model 2!');
+    expect(result!.content).toBe('From model 2!');
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
@@ -88,7 +88,7 @@ describe('chat', () => {
     });
 
     const result = await chat(baseOptions);
-    expect(result.content).toBe('OK');
+    expect(result!.content).toBe('OK');
   });
 
   it('falls back on 500', async () => {
@@ -107,7 +107,7 @@ describe('chat', () => {
     });
 
     const result = await chat(baseOptions);
-    expect(result.content).toBe('Got it');
+    expect(result!.content).toBe('Got it');
   });
 
   it('falls back on API error in response body', async () => {
@@ -128,7 +128,7 @@ describe('chat', () => {
     });
 
     const result = await chat(baseOptions);
-    expect(result.content).toBe('Fallback response');
+    expect(result!.content).toBe('Fallback response');
   });
 
   it('falls back on empty content', async () => {
@@ -149,7 +149,7 @@ describe('chat', () => {
     });
 
     const result = await chat(baseOptions);
-    expect(result.content).toBe('Not empty!');
+    expect(result!.content).toBe('Not empty!');
   });
 
   it('falls back on fetch error (network)', async () => {
@@ -164,7 +164,7 @@ describe('chat', () => {
     });
 
     const result = await chat(baseOptions);
-    expect(result.content).toBe('After network error');
+    expect(result!.content).toBe('After network error');
   });
 
   it('returns graceful degradation when all models fail', async () => {
@@ -180,8 +180,7 @@ describe('chat', () => {
     });
 
     const result = await chat({ ...baseOptions, models: tinyModels });
-    expect(result.content).toContain('sem acesso a modelos');
-    expect(result.model).toBe('none');
+    expect(result).toBeNull();
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
@@ -231,6 +230,6 @@ describe('chat', () => {
     });
 
     const result = await chat(baseOptions);
-    expect(result.content).toBe('After 401');
+    expect(result!.content).toBe('After 401');
   });
 });

@@ -35,6 +35,24 @@ const FREE_MODELS: FreeModel[] = [
 
 const RETRYABLE_STATUS_CODES = [429, 503, 502, 500];
 const REQUEST_TIMEOUT_MS = 30_000;
+const COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes cooldown after 429
+
+/** Track models that returned 429 recently — skip them to save time */
+const cooldownMap = new Map<string, number>();
+
+function isOnCooldown(modelId: string): boolean {
+  const until = cooldownMap.get(modelId);
+  if (!until) return false;
+  if (Date.now() > until) {
+    cooldownMap.delete(modelId);
+    return false;
+  }
+  return true;
+}
+
+function setCooldown(modelId: string): void {
+  cooldownMap.set(modelId, Date.now() + COOLDOWN_MS);
+}
 
 export function getFreeModels(): FreeModel[] {
   return [...FREE_MODELS];
@@ -60,7 +78,7 @@ interface ChatOptions {
   history?: HistoryMessage[];
 }
 
-export async function chat(options: ChatOptions): Promise<LlmResponse> {
+export async function chat(options: ChatOptions): Promise<LlmResponse | null> {
   const { apiKey, systemPrompt, userMessage, models = FREE_MODELS, history = [] } = options;
 
   // Build messages: system prompt + conversation history + current message
@@ -78,6 +96,11 @@ export async function chat(options: ChatOptions): Promise<LlmResponse> {
   messages.push({ role: 'user', content: userMessage });
 
   for (const model of models) {
+    // Skip models on cooldown (recently returned 429)
+    if (isOnCooldown(model.id)) {
+      continue;
+    }
+
     try {
       const response = await fetchWithTimeout(
         'https://openrouter.ai/api/v1/chat/completions',
@@ -91,21 +114,27 @@ export async function chat(options: ChatOptions): Promise<LlmResponse> {
           body: JSON.stringify({
             model: model.id,
             messages,
-            max_tokens: 256,
+            max_tokens: 50,
             temperature: 0.7,
           }),
         },
         REQUEST_TIMEOUT_MS,
       );
 
+      if (response.status === 429) {
+        setCooldown(model.id);
+        console.warn(`⚠️  ${model.name} → 429, cooldown 2min`);
+        continue;
+      }
+
       if (RETRYABLE_STATUS_CODES.includes(response.status)) {
-        console.warn(`⚠️  ${model.name} returned ${response.status}, trying next model...`);
+        console.warn(`⚠️  ${model.name} → ${response.status}`);
         continue;
       }
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'unknown error');
-        console.warn(`⚠️  ${model.name} returned ${response.status}: ${errorText.slice(0, 200)}`);
+        console.warn(`⚠️  ${model.name} → ${response.status}: ${errorText.slice(0, 100)}`);
         continue;
       }
 
@@ -121,22 +150,20 @@ export async function chat(options: ChatOptions): Promise<LlmResponse> {
 
       const content = data.choices?.[0]?.message?.content?.trim();
       if (!content) {
-        console.warn(`⚠️  ${model.name} returned empty content, trying next...`);
+        console.warn(`⚠️  ${model.name} empty response`);
         continue;
       }
 
       return { content, model: model.id };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`⚠️  ${model.name} failed: ${msg}, trying next...`);
+      console.warn(`⚠️  ${model.name}: ${msg}`);
       continue;
     }
   }
 
-  return {
-    content: '😅 Estou sem acesso a modelos no momento. Tenta de novo em alguns minutos!',
-    model: 'none',
-  };
+  // All models failed — return null to signal "don't respond"
+  return null;
 }
 
 async function fetchWithTimeout(

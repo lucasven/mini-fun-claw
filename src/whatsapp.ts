@@ -229,6 +229,12 @@ async function handleMessage(
     history,
   });
 
+  // All models failed — silently skip
+  if (!response) {
+    console.log(`💤 [${jid}] All models unavailable, skipping`);
+    return;
+  }
+
   // Check if LLM decided to skip this message
   const trimmedResponse = response.content.trim();
   if (trimmedResponse === '[SKIP]' || trimmedResponse.toLowerCase() === '[skip]') {
