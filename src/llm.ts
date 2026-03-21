@@ -3,19 +3,20 @@ import type { FreeModel, LlmResponse } from './types.js';
 /**
  * Curated list of OpenRouter free models, ordered by capability.
  * These are models with `:free` suffix on OpenRouter.
- * Updated: 2026-03-20. Check https://openrouter.ai/models for latest.
+ * Updated: 2026-03-21. Check https://openrouter.ai/models for latest.
+ * IDs change frequently — verify with: curl https://openrouter.ai/api/v1/models | jq '.data[].id' | grep free
  */
 const FREE_MODELS: FreeModel[] = [
-  { id: 'google/gemini-2.0-flash-exp:free', name: 'Gemini 2.0 Flash', contextLength: 1048576 },
-  { id: 'google/gemma-3-27b-it:free', name: 'Gemma 3 27B', contextLength: 96000 },
-  { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B', contextLength: 131072 },
-  { id: 'qwen/qwen-2.5-72b-instruct:free', name: 'Qwen 2.5 72B', contextLength: 32768 },
-  { id: 'deepseek/deepseek-chat-v3-0324:free', name: 'DeepSeek V3 0324', contextLength: 131072 },
-  { id: 'mistralai/mistral-small-3.1-24b-instruct:free', name: 'Mistral Small 3.1', contextLength: 96000 },
-  { id: 'google/gemma-3-12b-it:free', name: 'Gemma 3 12B', contextLength: 131072 },
-  { id: 'meta-llama/llama-3.1-8b-instruct:free', name: 'Llama 3.1 8B', contextLength: 131072 },
-  { id: 'qwen/qwen-2.5-7b-instruct:free', name: 'Qwen 2.5 7B', contextLength: 32768 },
-  { id: 'google/gemma-3-4b-it:free', name: 'Gemma 3 4B', contextLength: 131072 },
+  { id: 'nousresearch/hermes-3-llama-3.1-405b:free', name: 'Hermes 3 405B', contextLength: 131072 },
+  { id: 'nvidia/nemotron-3-super-120b-a12b:free', name: 'Nemotron Super 120B', contextLength: 262144 },
+  { id: 'openai/gpt-oss-120b:free', name: 'GPT-OSS 120B', contextLength: 131072 },
+  { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B', contextLength: 65536 },
+  { id: 'mistralai/mistral-small-3.1-24b-instruct:free', name: 'Mistral Small 3.1', contextLength: 128000 },
+  { id: 'google/gemma-3-27b-it:free', name: 'Gemma 3 27B', contextLength: 131072 },
+  { id: 'minimax/minimax-m2.5:free', name: 'MiniMax M2.5', contextLength: 196608 },
+  { id: 'qwen/qwen3-coder:free', name: 'Qwen 3 Coder', contextLength: 262000 },
+  { id: 'google/gemma-3-12b-it:free', name: 'Gemma 3 12B', contextLength: 32768 },
+  { id: 'google/gemma-3-4b-it:free', name: 'Gemma 3 4B', contextLength: 32768 },
 ];
 
 const RETRYABLE_STATUS_CODES = [429, 503, 502, 500];
