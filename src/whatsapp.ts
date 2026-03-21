@@ -1,6 +1,7 @@
 import makeWASocket, {
   useMultiFileAuthState,
   DisconnectReason,
+  Browsers,
   type WASocket,
   type BaileysEventMap,
 } from '@whiskeysockets/baileys';
@@ -30,7 +31,8 @@ export async function startBot(config: Config): Promise<void> {
     const sock: WASocket = makeWASocket({
       auth: state,
       logger,
-      browser: ['Mini Fun Claw', 'Chrome', '1.0.0'],
+      browser: Browsers.macOS('Desktop'),
+      version: [2, 3000, 1033893291] as [number, number, number],
     });
 
     sock.ev.on('creds.update', saveCreds);
