@@ -7,16 +7,30 @@ import type { FreeModel, LlmResponse } from './types.js';
  * IDs change frequently — verify with: curl https://openrouter.ai/api/v1/models | jq '.data[].id' | grep free
  */
 const FREE_MODELS: FreeModel[] = [
+  // Tier 1: Large models (best quality)
   { id: 'nousresearch/hermes-3-llama-3.1-405b:free', name: 'Hermes 3 405B', contextLength: 131072 },
   { id: 'nvidia/nemotron-3-super-120b-a12b:free', name: 'Nemotron Super 120B', contextLength: 262144 },
   { id: 'openai/gpt-oss-120b:free', name: 'GPT-OSS 120B', contextLength: 131072 },
   { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B', contextLength: 65536 },
+  { id: 'qwen/qwen3-next-80b-a3b-instruct:free', name: 'Qwen 3 Next 80B', contextLength: 262144 },
+  // Tier 2: Medium models (good quality, faster)
   { id: 'mistralai/mistral-small-3.1-24b-instruct:free', name: 'Mistral Small 3.1', contextLength: 128000 },
+  { id: 'nvidia/nemotron-3-nano-30b-a3b:free', name: 'Nemotron Nano 30B', contextLength: 256000 },
   { id: 'google/gemma-3-27b-it:free', name: 'Gemma 3 27B', contextLength: 131072 },
   { id: 'minimax/minimax-m2.5:free', name: 'MiniMax M2.5', contextLength: 196608 },
+  { id: 'cognitivecomputations/dolphin-mistral-24b-venice-edition:free', name: 'Dolphin Mistral 24B', contextLength: 32768 },
+  { id: 'stepfun/step-3.5-flash:free', name: 'Step 3.5 Flash', contextLength: 256000 },
+  { id: 'z-ai/glm-4.5-air:free', name: 'GLM 4.5 Air', contextLength: 131072 },
   { id: 'qwen/qwen3-coder:free', name: 'Qwen 3 Coder', contextLength: 262000 },
+  { id: 'openai/gpt-oss-20b:free', name: 'GPT-OSS 20B', contextLength: 131072 },
+  // Tier 3: Small models (fast fallback)
   { id: 'google/gemma-3-12b-it:free', name: 'Gemma 3 12B', contextLength: 32768 },
+  { id: 'nvidia/nemotron-nano-9b-v2:free', name: 'Nemotron Nano 9B', contextLength: 128000 },
+  { id: 'arcee-ai/trinity-large-preview:free', name: 'Trinity Large', contextLength: 131000 },
+  { id: 'arcee-ai/trinity-mini:free', name: 'Trinity Mini', contextLength: 131072 },
+  { id: 'qwen/qwen3-4b:free', name: 'Qwen 3 4B', contextLength: 40960 },
   { id: 'google/gemma-3-4b-it:free', name: 'Gemma 3 4B', contextLength: 32768 },
+  { id: 'meta-llama/llama-3.2-3b-instruct:free', name: 'Llama 3.2 3B', contextLength: 131072 },
 ];
 
 const RETRYABLE_STATUS_CODES = [429, 503, 502, 500];
