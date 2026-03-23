@@ -1,110 +1,56 @@
 # 🤖 Mini Fun Claw
 
-> Um amigo IA no seu grupo de WhatsApp. Grátis, customizável, open source.
+> A free, customizable AI friend for your WhatsApp group.
 
-Mini Fun Claw é um bot WhatsApp minimalista que usa modelos de IA **100% grátis** via [OpenRouter](https://openrouter.ai). Roda no seu computador, conecta via QR code, e responde no grupo com a personalidade que você escolher.
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-22+-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 
-**Zero custo.** Sem API keys pagas, sem hosting, sem banco de dados.
+Minimal WhatsApp bot powered by **20+ free AI models** via [OpenRouter](https://openrouter.ai). Runs locally, connects via QR code, responds with whatever personality you give it. Zero cost, zero hosting, zero database.
 
-## ⚡ Setup em 5 minutos
-
-### 1. Clone e instale
+## ⚡ Quick Start
 
 ```bash
 git clone https://github.com/lucasven/mini-fun-claw.git
-cd mini-fun-claw
-npm install
+cd mini-fun-claw && npm install
+cp .env.example .env  # add your free OpenRouter key
+npm start             # scan QR code → done
 ```
 
-### 2. Configure
+Get your free API key at [openrouter.ai/keys](https://openrouter.ai/keys).
 
-```bash
-cp .env.example .env
-```
+## ✨ Features
 
-Edite `.env`:
+- 🆓 **100% free** — OpenRouter free-tier models, no credit card
+- 🔄 **Auto-fallback** — 21 models in chain, tries next on failure (429/503/timeout)
+- 🎭 **Custom personas** — drop-in `SOUL.md` + `AGENTS.md` files define who the bot *is*
+- 🔐 **Group whitelist** — only responds in authorized groups, ignores DMs
+- 💬 **Smart response rate** — configurable probability (default 10%) so it doesn't spam the group
+- 🗣️ **Conversation memory** — keeps last 15 messages per group for multi-turn context
+- 🔑 **Multi-provider** — OpenRouter, OpenAI, Anthropic, Codex CLI (free via OAuth!)
+- ⏱️ **30s cooldown** — models that return 429 are skipped temporarily
+- 🚫 **[SKIP] protocol** — persona can choose *not to respond* to irrelevant messages
 
-```env
-# Pegue sua key grátis em https://openrouter.ai/keys
-OPENROUTER_API_KEY=sk-or-v1-xxxxx
+## 🎭 Personas
 
-# JIDs dos grupos autorizados (veja seção "Como encontrar o JID")
-GROUP_WHITELIST=120363000000000000@g.us
+The bot reads `SOUL.md` (who it is) and `AGENTS.md` (how it behaves) from the project root. Three examples included:
 
-# Opcional: prefixo pra ativar o bot (vazio = responde tudo)
-BOT_PREFIX=!claw
+### 🎉 Party Bot (`personas/fun/`)
+> *"BOM DIAAAA! 🌅🔥 Hoje vai ser épico, pode confiar!"*
 
-# Taxa de resposta aleatória (0.0 a 1.0). Default: 0.1 = 10%
-# O bot só responde a ~10% das mensagens pra não dominar o grupo.
-# Menções diretas e replies ao bot sempre respondem (bypass).
-RESPONSE_RATE=0.1
-```
+Energetic, emoji-heavy, turns boring questions into fun answers. Always upbeat.
 
-### 3. Inicie
+### 📚 Professor (`personas/serious/`)
+> Clear, structured explanations with analogies. Asks for clarification when needed.
 
-```bash
-npm start
-```
+Calm, professional, fact-first. Uses lists for multi-point answers. Max 1 emoji.
 
-Escaneie o QR code com seu WhatsApp. Pronto! 🎉
+### 🔧 Dev Helper (`personas/tech/`)
+> Pragmatic senior dev. Shows code, mentions edge cases, says "it depends" when it does.
 
-### Usando Claude Subscription (OAuth — Grátis!)
+Technical, concise, opinionated. TDD evangelist. Warns about insecure code.
 
-Se você tem assinatura Claude Pro, Max ou Team, pode usá-la diretamente — sem API key:
-
-1. Rode o login:
-   ```bash
-   npx @mariozechner/pi-ai login anthropic
-   ```
-2. Uma janela do browser abre — faça login com sua conta Claude
-3. Credenciais são salvas em `auth.json` no diretório do projeto
-4. Inicie o bot — ele detecta as credenciais OAuth automaticamente
-
-O bot renova tokens expirados automaticamente. Custo: $0 (usa sua assinatura existente).
-
-### Usando ChatGPT Subscription (OAuth — Grátis!)
-
-Se você tem assinatura ChatGPT Plus ou Pro:
-
-1. Rode o login:
-   ```bash
-   npx @mariozechner/pi-ai login openai-codex
-   ```
-2. Uma janela do browser abre — faça login com sua conta OpenAI
-3. Credenciais são salvas em `auth.json` no diretório do projeto
-4. Inicie o bot — ele detecta as credenciais OAuth automaticamente
-
-Custo: $0 (usa sua assinatura existente).
-
-> **Dica:** Você pode ter ambos (Claude + ChatGPT) configurados. O bot tenta o primeiro da lista e faz fallback pro próximo.
-
-## 🔑 Como encontrar o JID do grupo
-
-1. Inicie o bot sem `GROUP_WHITELIST` (vai logar mas não responder nada)
-2. Mande uma mensagem no grupo
-3. Olhe os logs — o JID aparece como `120363xxxxx@g.us`
-4. Adicione no `.env` e reinicie
-
-## 🎭 Personalidade customizável
-
-O bot lê dois arquivos na raiz do projeto:
-
-| Arquivo | O que faz |
-|---------|-----------|
-| `SOUL.md` | Define quem o bot **é** — personalidade, tom, valores |
-| `AGENTS.md` | Define como o bot **age** — regras, formato, limites |
-
-### Personas incluídas
-
-O repo inclui 3 exemplos na pasta `personas/`:
-
-| Persona | Descrição |
-|---------|-----------|
-| `personas/fun/` | 🎉 Party Bot — animado, emojis, piadas |
-| `personas/serious/` | 📚 Professor — informativo, calmo, estruturado |
-| `personas/tech/` | 🔧 Dev Helper — pragmático, código, TDD |
-
-Para usar uma persona, copie os arquivos:
+**To use a persona:**
 
 ```bash
 cp personas/tech/SOUL.md SOUL.md
@@ -112,51 +58,107 @@ cp personas/tech/AGENTS.md AGENTS.md
 npm start
 ```
 
-Ou crie a sua! Só editar `SOUL.md` e `AGENTS.md`.
+Or write your own — just edit `SOUL.md` and `AGENTS.md`.
 
-## 🔒 Segurança
+## 🔑 Providers
 
-- **Whitelist obrigatória** — só responde em grupos autorizados
-- **Ignora DMs** — não responde em conversas privadas
-- **Não envia nada sozinho** — só responde quando recebe mensagem
-- **Stateless** — não armazena mensagens ou dados
+| Tier | Provider | Setup | Cost |
+|------|----------|-------|------|
+| **Free** | OpenRouter | `OPENROUTER_API_KEY` in `.env` | $0 |
+| **Premium** | Anthropic | `ANTHROPIC_API_KEY` in `.env` | API pricing |
+| **Premium** | OpenAI | `OPENAI_API_KEY` in `.env` | API pricing |
+| **Subscription** | Claude (OAuth) | `npx @mariozechner/pi-ai login anthropic` | $0 (uses your sub) |
+| **Subscription** | ChatGPT (OAuth) | `npx @mariozechner/pi-ai login openai-codex` | $0 (uses your sub) |
+| **CLI** | Codex CLI | `~/.codex/auth.json` auto-detected | Depends on plan |
 
-## 🤖 Modelos grátis
+**Priority order:** env API key → OAuth subscription → Codex CLI → OpenRouter free tier.
 
-O bot usa modelos gratuitos do OpenRouter, em ordem de capacidade:
+### Using Claude Subscription (OAuth — Free!)
 
-1. Gemini 2.0 Flash
-2. Gemma 3 27B
-3. Llama 3.3 70B
-4. Qwen 2.5 72B
-5. DeepSeek V3
-6. Mistral Small 3.1
-7. ...e mais
+If you have a Claude Pro, Max, or Team subscription:
 
-Se um modelo estiver indisponível (429/503), o bot automaticamente tenta o próximo. Se **todos** falharem, avisa no grupo educadamente.
+```bash
+npx @mariozechner/pi-ai login anthropic
+# Browser opens → log in → credentials saved to auth.json
+npm start  # auto-detected
+```
 
-## 📁 Estrutura
+### Using ChatGPT Subscription (OAuth — Free!)
+
+If you have a ChatGPT Plus or Pro subscription:
+
+```bash
+npx @mariozechner/pi-ai login openai-codex
+# Browser opens → log in → credentials saved to auth.json
+npm start  # auto-detected
+```
+
+> **Tip:** You can have both configured. The bot tries the first available and falls back to the next.
+
+Tokens are auto-refreshed on expiry. Set `PREFERRED_PROVIDER=anthropic` to force a specific provider.
+
+## 🤖 Models
+
+21 free models via OpenRouter, organized in 3 tiers:
+
+### Tier 1 — Large (best quality)
+| Model | Context |
+|-------|---------|
+| Hermes 3 405B | 128K |
+| Nemotron Super 120B | 256K |
+| GPT-OSS 120B | 128K |
+| Llama 3.3 70B | 64K |
+| Qwen 3 Next 80B | 256K |
+
+### Tier 2 — Medium (good quality, faster)
+| Model | Context |
+|-------|---------|
+| Mistral Small 3.1 | 128K |
+| Nemotron Nano 30B | 256K |
+| Gemma 3 27B | 128K |
+| MiniMax M2.5 | 192K |
+| Dolphin Mistral 24B | 32K |
+| Step 3.5 Flash | 256K |
+| GLM 4.5 Air | 128K |
+| Qwen 3 Coder | 256K |
+| GPT-OSS 20B | 128K |
+
+### Tier 3 — Small (fast fallback)
+| Model | Context |
+|-------|---------|
+| Gemma 3 12B | 32K |
+| Nemotron Nano 9B | 128K |
+| Trinity Large | 128K |
+| Trinity Mini | 128K |
+| Qwen 3 4B | 40K |
+| Gemma 3 4B | 32K |
+| Llama 3.2 3B | 128K |
+
+If a model is unavailable, the bot automatically tries the next one. If **all** fail, it stays quiet.
+
+## 📁 Structure
 
 ```
 mini-fun-claw/
 ├── src/
-│   ├── index.ts        # Entry point
-│   ├── config.ts       # Carrega .env + validação
-│   ├── whatsapp.ts     # Conexão Baileys + message handling
-│   ├── llm.ts          # OpenRouter com fallback automático
-│   ├── persona.ts      # Carrega SOUL.md + AGENTS.md
-│   └── types.ts        # TypeScript interfaces
-├── personas/           # Exemplos de personalidade
-│   ├── fun/
-│   ├── serious/
-│   └── tech/
-├── SOUL.md             # Personalidade ativa
-├── AGENTS.md           # Regras operacionais ativas
-├── .env.example        # Template de configuração
+│   ├── index.ts          # Entry point
+│   ├── config.ts         # Loads .env + validation
+│   ├── whatsapp.ts       # Baileys connection + message handling
+│   ├── llm.ts            # Multi-provider chat + OpenRouter fallback chain
+│   ├── provider.ts       # Provider detection (env, OAuth, CLI)
+│   ├── persona.ts        # Loads SOUL.md + AGENTS.md
+│   └── types.ts          # TypeScript interfaces
+├── personas/             # Example personalities
+│   ├── fun/              # 🎉 Party Bot
+│   ├── serious/          # 📚 Professor
+│   └── tech/             # 🔧 Dev Helper
+├── SOUL.md               # Active personality (your choice)
+├── AGENTS.md             # Active behavior rules
+├── .env.example          # Configuration template
 └── package.json
 ```
 
-## 🧪 Testes
+## 🧪 Tests
 
 ```bash
 npm test
@@ -164,25 +166,29 @@ npm test
 
 ## ❓ FAQ
 
-**P: É grátis mesmo?**
-R: Sim. OpenRouter oferece modelos grátis com rate limits generosos. Zero custo.
+**Is it really free?**
+Yes. OpenRouter offers free-tier models with generous rate limits. OAuth uses your existing subscription. Zero extra cost.
 
-**P: Precisa de número dedicado?**
-R: Não. Usa seu WhatsApp pessoal. Mas recomendamos um número separado pra não misturar.
+**Do I need a dedicated phone number?**
+No. Uses your personal WhatsApp. But a separate number is recommended to keep things clean.
 
-**P: Funciona no WhatsApp Business?**
-R: Sim, Baileys funciona com ambos.
+**What happens when a free model goes down?**
+The bot tries the next model in the chain. 21 models means high availability. If all fail simultaneously, it stays silent (no error messages in the group).
 
-**P: Os modelos grátis são bons?**
-R: Surpreendentemente sim. Gemini Flash e Llama 3.3 70B são muito capazes.
+**Can I use it in multiple groups?**
+Yes. Add multiple JIDs comma-separated in `GROUP_WHITELIST`. Each group has independent conversation history.
 
-**P: E se o OpenRouter mudar os modelos grátis?**
-R: Edite a lista em `src/llm.ts`. A estrutura de fallback continua funcionando.
+**How do I find my group's JID?**
+Start the bot without `GROUP_WHITELIST`, send a message in the group, check the logs for the JID (`120363xxxxx@g.us`), add it to `.env`.
 
 ## 📄 License
 
-MIT — use, modifique, distribua livremente.
+[MIT](LICENSE) — use, modify, distribute freely.
+
+## 🤝 Contributing
+
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ---
 
-Feito com 🔨 por [OpenClaw](https://github.com/openclaw/openclaw).
+Built with 🔨 by [OpenClaw](https://github.com/openclaw/openclaw).
