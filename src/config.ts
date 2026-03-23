@@ -1,8 +1,16 @@
 import type { Config } from './types.js';
+import { detectProvider } from './provider.js';
 
 export function loadConfig(): Config {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error('OPENROUTER_API_KEY is required');
+  const apiKey = process.env.OPENROUTER_API_KEY ?? '';
+
+  // At least one provider must be available
+  const provider = detectProvider();
+  if (!provider && !apiKey) {
+    throw new Error(
+      'No LLM provider configured. Set at least one of: OPENROUTER_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY',
+    );
+  }
 
   const whitelist = (process.env.GROUP_WHITELIST ?? '')
     .split(',')

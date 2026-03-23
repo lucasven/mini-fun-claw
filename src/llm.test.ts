@@ -1,5 +1,12 @@
 import { getFreeModels, chat } from './llm.js';
 
+// Mock provider module to return empty chain (forces OpenRouter fallback path)
+jest.mock('./provider.js', () => ({
+  resolveProviderChain: jest.fn(() => []),
+  formatProviderInfo: jest.fn((c: any) => `${c.provider} (${c.source})`),
+  detectProvider: jest.fn(() => null),
+}));
+
 // Mock global fetch
 const mockFetch = jest.fn();
 global.fetch = mockFetch as never;

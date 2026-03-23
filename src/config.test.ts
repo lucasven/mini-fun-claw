@@ -1,16 +1,35 @@
 import { loadConfig, isGroupAllowed, isGroupMessage, shouldRespond } from './config.js';
 
+// Mock provider detection for isolated config tests
+const mockDetectProvider = jest.fn();
+jest.mock('./provider.js', () => ({
+  detectProvider: (...args: any[]) => mockDetectProvider(...args),
+}));
+
 describe('loadConfig', () => {
   const original = { ...process.env };
 
   afterEach(() => {
     process.env = { ...original };
+    mockDetectProvider.mockReset();
   });
 
-  it('throws when OPENROUTER_API_KEY is missing', () => {
+  it('throws when no LLM provider is configured', () => {
     delete process.env.OPENROUTER_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
     process.env.GROUP_WHITELIST = '123@g.us';
-    expect(() => loadConfig()).toThrow('OPENROUTER_API_KEY is required');
+    mockDetectProvider.mockReturnValue(null);
+    expect(() => loadConfig()).toThrow('No LLM provider configured');
+  });
+
+  it('works with OPENAI_API_KEY instead of OPENROUTER_API_KEY', () => {
+    delete process.env.OPENROUTER_API_KEY;
+    process.env.OPENAI_API_KEY = 'sk-openai-test';
+    process.env.GROUP_WHITELIST = '123@g.us';
+    mockDetectProvider.mockReturnValue({ provider: 'openai', apiKey: 'sk-openai-test', source: 'env', model: 'gpt-4o-mini' });
+    const config = loadConfig();
+    expect(config.openrouterApiKey).toBe('');
   });
 
   it('returns empty whitelist with warning when GROUP_WHITELIST is empty', () => {

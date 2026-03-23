@@ -1,4 +1,79 @@
 import type { FreeModel, LlmResponse } from './types.js';
+import { resolveProviderChain, formatProviderInfo, type ProviderConfig } from './provider.js';
+
+// ─── pi-ai provider adapters ────────────────────────────────
+
+interface PiAiModuleCache {
+  loaded: boolean;
+  complete?: (model: any, context: any, options?: any) => Promise<any>;
+  getModel?: (provider: string, modelId: string) => any;
+}
+
+const piAiCache: PiAiModuleCache = { loaded: false };
+
+async function loadPiAi(): Promise<typeof piAiCache> {
+  if (piAiCache.loaded) return piAiCache;
+
+  try {
+    const piAi = await import('@mariozechner/pi-ai');
+    piAi.registerBuiltInApiProviders();
+    piAiCache.complete = piAi.complete;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (piAiCache as any).getModel = (piAi as any).getModel;
+    piAiCache.loaded = true;
+  } catch (err) {
+    console.warn('Failed to load pi-ai:', err instanceof Error ? err.message : err);
+  }
+
+  return piAiCache;
+}
+
+async function chatWithPiAi(
+  config: ProviderConfig,
+  systemPrompt: string,
+  userMessage: string,
+): Promise<LlmResponse | null> {
+  const piAi = await loadPiAi();
+  if (!piAi.complete || !piAi.getModel) return null;
+
+  try {
+    const model = piAi.getModel(config.provider as any, config.model as any);
+
+    const context = {
+      systemPrompt,
+      messages: [
+        {
+          role: 'user' as const,
+          content: userMessage,
+          timestamp: Date.now(),
+        },
+      ],
+    };
+
+    const response = await piAi.complete(model, context, {
+      apiKey: config.apiKey,
+      maxTokens: 150,
+      temperature: 0.7,
+    });
+
+    const text = response.content
+      .filter((c: any) => c.type === 'text')
+      .map((c: any) => c.text)
+      .join('\n')
+      .trim();
+
+    if (!text) return null;
+
+    return {
+      content: text,
+      model: `${config.provider}/${config.model}`,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`${config.provider}/${config.model} failed: ${msg}`);
+    return null;
+  }
+}
 
 /**
  * Curated list of OpenRouter free models, ordered by capability.
@@ -80,6 +155,23 @@ interface ChatOptions {
 
 export async function chat(options: ChatOptions): Promise<LlmResponse | null> {
   const { apiKey, systemPrompt, userMessage, models = FREE_MODELS, history = [] } = options;
+
+  // Try pi-ai providers first (Anthropic, OpenAI via API key)
+  const chain = resolveProviderChain();
+  for (const config of chain) {
+    if (config.provider === 'openrouter') continue; // OpenRouter handled below via raw fetch
+
+    const result = await chatWithPiAi(config, systemPrompt, userMessage);
+    if (result) {
+      console.log(`[${formatProviderInfo(config)}]`);
+      return result;
+    }
+  }
+
+  // Fall back to OpenRouter (raw fetch with model rotation + cooldown)
+  const openRouterConfig = chain.find(c => c.provider === 'openrouter');
+  const orApiKey = openRouterConfig?.apiKey ?? apiKey;
+  if (!orApiKey) return null;
 
   // Build messages: system prompt + conversation history + current message
   const messages: OpenRouterMessage[] = [
@@ -171,6 +263,23 @@ export async function chat(options: ChatOptions): Promise<LlmResponse | null> {
 
   // All models failed — return null to signal "don't respond"
   return null;
+}
+
+// ─── Startup logging ────────────────────────────────────────
+
+export function logProviderStatus(): void {
+  const chain = resolveProviderChain();
+
+  if (chain.length === 0) {
+    console.log('No providers configured! Set at least one of: OPENROUTER_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY');
+    return;
+  }
+
+  console.log('Provider chain:');
+  chain.forEach((config, i) => {
+    const label = i === 0 ? '  Primary' : '  Fallback';
+    console.log(`${label}: ${formatProviderInfo(config)}`);
+  });
 }
 
 async function fetchWithTimeout(
