@@ -1,5 +1,7 @@
 import type { FreeModel, LlmResponse } from './types.js';
-import { resolveProviderChain, formatProviderInfo, type ProviderConfig } from './provider.js';
+import { resolveProviderChain, formatProviderInfo, readPiAiAuth, type ProviderConfig } from './provider.js';
+import { writeFileSync } from 'fs';
+import { join } from 'path';
 
 // ─── pi-ai provider adapters ────────────────────────────────
 
@@ -28,6 +30,40 @@ async function loadPiAi(): Promise<typeof piAiCache> {
   return piAiCache;
 }
 
+// ─── OAuth key resolution ───────────────────────────────────
+
+/** Map provider name to pi-ai OAuth provider name */
+const OAUTH_PROVIDER_MAP: Record<string, string> = {
+  anthropic: 'anthropic',
+  openai: 'openai-codex',
+};
+
+async function resolveOAuthApiKey(providerName: string): Promise<string | null> {
+  const auth = readPiAiAuth();
+  if (!auth) return null;
+
+  const oauthProvider = OAUTH_PROVIDER_MAP[providerName];
+  if (!oauthProvider) return null;
+
+  try {
+    const { getOAuthApiKey } = await import('@mariozechner/pi-ai/oauth');
+    const result = await getOAuthApiKey(oauthProvider as any, auth as any);
+    if (!result) return null;
+
+    // Save refreshed credentials back to auth.json
+    auth[oauthProvider] = { type: 'oauth', ...result.newCredentials };
+    const authPath = process.env.PI_AI_AUTH_PATH || join(process.cwd(), 'auth.json');
+    try {
+      writeFileSync(authPath, JSON.stringify(auth, null, 2));
+    } catch { /* non-fatal — next call will refresh again */ }
+
+    return result.apiKey;
+  } catch (err) {
+    console.warn(`OAuth key resolution failed for ${providerName}: ${err instanceof Error ? err.message : err}`);
+    return null;
+  }
+}
+
 async function chatWithPiAi(
   config: ProviderConfig,
   systemPrompt: string,
@@ -36,8 +72,23 @@ async function chatWithPiAi(
   const piAi = await loadPiAi();
   if (!piAi.complete || !piAi.getModel) return null;
 
+  // Resolve actual API key for OAuth providers
+  let apiKey = config.apiKey;
+  if (config.source === 'pi-ai-oauth') {
+    const resolved = await resolveOAuthApiKey(config.provider);
+    if (!resolved) {
+      console.warn(`⚠️  Failed to resolve OAuth key for ${config.provider}`);
+      return null;
+    }
+    apiKey = resolved;
+  }
+
   try {
-    const model = piAi.getModel(config.provider as any, config.model as any);
+    // OAuth providers use different pi-ai provider names
+    const piAiProvider = config.source === 'pi-ai-oauth'
+      ? (OAUTH_PROVIDER_MAP[config.provider] ?? config.provider)
+      : config.provider;
+    const model = piAi.getModel(piAiProvider as any, config.model as any);
 
     const context = {
       systemPrompt,
@@ -51,7 +102,7 @@ async function chatWithPiAi(
     };
 
     const response = await piAi.complete(model, context, {
-      apiKey: config.apiKey,
+      apiKey,
       maxTokens: 150,
       temperature: 0.7,
     });

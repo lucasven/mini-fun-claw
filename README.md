@@ -48,6 +48,36 @@ npm start
 
 Escaneie o QR code com seu WhatsApp. Pronto! 🎉
 
+### Usando Claude Subscription (OAuth — Grátis!)
+
+Se você tem assinatura Claude Pro, Max ou Team, pode usá-la diretamente — sem API key:
+
+1. Rode o login:
+   ```bash
+   npx @mariozechner/pi-ai login anthropic
+   ```
+2. Uma janela do browser abre — faça login com sua conta Claude
+3. Credenciais são salvas em `auth.json` no diretório do projeto
+4. Inicie o bot — ele detecta as credenciais OAuth automaticamente
+
+O bot renova tokens expirados automaticamente. Custo: $0 (usa sua assinatura existente).
+
+### Usando ChatGPT Subscription (OAuth — Grátis!)
+
+Se você tem assinatura ChatGPT Plus ou Pro:
+
+1. Rode o login:
+   ```bash
+   npx @mariozechner/pi-ai login openai-codex
+   ```
+2. Uma janela do browser abre — faça login com sua conta OpenAI
+3. Credenciais são salvas em `auth.json` no diretório do projeto
+4. Inicie o bot — ele detecta as credenciais OAuth automaticamente
+
+Custo: $0 (usa sua assinatura existente).
+
+> **Dica:** Você pode ter ambos (Claude + ChatGPT) configurados. O bot tenta o primeiro da lista e faz fallback pro próximo.
+
 ## 🔑 Como encontrar o JID do grupo
 
 1. Inicie o bot sem `GROUP_WHITELIST` (vai logar mas não responder nada)

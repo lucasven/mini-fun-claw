@@ -4,11 +4,9 @@
  * Priority:
  * 1. PREFERRED_PROVIDER env var (if set + matching credentials exist)
  * 2. Env API keys (ANTHROPIC_API_KEY, OPENAI_API_KEY)
- * 3. CLI credentials (~/.codex/auth.json for OpenAI)
- * 4. OpenRouter free tier (OPENROUTER_API_KEY)
- *
- * Note: Claude CLI OAuth tokens (~/.claude/.credentials.json) are NOT supported
- * because Anthropic's REST API returns 401 for OAuth tokens. Use ANTHROPIC_API_KEY instead.
+ * 3. pi-ai OAuth (auth.json from `npx @mariozechner/pi-ai login`)
+ * 4. CLI credentials (~/.codex/auth.json for OpenAI)
+ * 5. OpenRouter free tier (OPENROUTER_API_KEY)
  */
 
 import { existsSync, readFileSync } from 'fs';
@@ -16,7 +14,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 
 export type ProviderName = 'anthropic' | 'openai' | 'openrouter';
-export type CredentialSource = 'env' | 'codex-cli';
+export type CredentialSource = 'env' | 'codex-cli' | 'pi-ai-oauth';
 
 export interface ProviderConfig {
   provider: ProviderName;
@@ -33,6 +31,36 @@ const DEFAULT_MODELS: Record<ProviderName, string> = {
   openai: 'gpt-4o-mini',
   openrouter: 'nousresearch/hermes-3-llama-3.1-405b:free',
 };
+
+// ─── pi-ai OAuth credentials ────────────────────────────────
+
+export interface PiAiAuthJson {
+  anthropic?: { type: string; [key: string]: unknown };
+  'openai-codex'?: { type: string; [key: string]: unknown };
+  [key: string]: unknown;
+}
+
+/** Placeholder API key for OAuth providers — real key resolved at call time */
+export const PI_AI_OAUTH_PLACEHOLDER = '__pi_ai_oauth__';
+
+function getPiAiAuthPaths(): string[] {
+  return [
+    process.env.PI_AI_AUTH_PATH,
+    join(process.cwd(), 'auth.json'),
+  ].filter(Boolean) as string[];
+}
+
+export function readPiAiAuth(): PiAiAuthJson | null {
+  for (const authPath of getPiAiAuthPaths()) {
+    if (!existsSync(authPath)) continue;
+    try {
+      const raw = readFileSync(authPath, 'utf-8');
+      const auth = JSON.parse(raw);
+      if (auth && typeof auth === 'object') return auth;
+    } catch { /* skip invalid */ }
+  }
+  return null;
+}
 
 // ─── CLI credential paths ───────────────────────────────────
 
@@ -82,19 +110,12 @@ function readCodexCliCreds(): string | null {
   }
 }
 
-// ─── Detection ──────────────────────────────────────────────
+// ─── Collect Available Providers ────────────────────────────
 
-/**
- * Detect the best available provider based on env vars and CLI credentials.
- * Returns null if no provider is available.
- */
-export function detectProvider(): ProviderConfig | null {
-  const preferred = process.env.PREFERRED_PROVIDER as ProviderName | undefined;
-
-  // Collect all available providers
+function collectAvailableProviders(): ProviderConfig[] {
   const available: ProviderConfig[] = [];
 
-  // 1. Env API keys
+  // 1. Env API keys (highest priority)
   if (process.env.ANTHROPIC_API_KEY) {
     available.push({
       provider: 'anthropic',
@@ -113,7 +134,28 @@ export function detectProvider(): ProviderConfig | null {
     });
   }
 
-  // 2. Codex CLI credentials (lower priority than env keys)
+  // 2. pi-ai OAuth credentials (from `npx @mariozechner/pi-ai login`)
+  const piAiAuth = readPiAiAuth();
+
+  if (piAiAuth?.anthropic && !available.some(a => a.provider === 'anthropic')) {
+    available.push({
+      provider: 'anthropic',
+      apiKey: PI_AI_OAUTH_PLACEHOLDER,
+      source: 'pi-ai-oauth',
+      model: process.env.ANTHROPIC_MODEL ?? DEFAULT_MODELS.anthropic,
+    });
+  }
+
+  if (piAiAuth?.['openai-codex'] && !available.some(a => a.provider === 'openai')) {
+    available.push({
+      provider: 'openai',
+      apiKey: PI_AI_OAUTH_PLACEHOLDER,
+      source: 'pi-ai-oauth',
+      model: process.env.OPENAI_MODEL ?? DEFAULT_MODELS.openai,
+    });
+  }
+
+  // 3. Codex CLI credentials (~/.codex/auth.json)
   const codexToken = readCodexCliCreds();
   if (codexToken && !available.some(a => a.provider === 'openai')) {
     available.push({
@@ -124,7 +166,7 @@ export function detectProvider(): ProviderConfig | null {
     });
   }
 
-  // 3. OpenRouter (lowest priority)
+  // 4. OpenRouter (lowest priority)
   if (process.env.OPENROUTER_API_KEY) {
     available.push({
       provider: 'openrouter',
@@ -134,15 +176,26 @@ export function detectProvider(): ProviderConfig | null {
     });
   }
 
+  return available;
+}
+
+// ─── Detection ──────────────────────────────────────────────
+
+/**
+ * Detect the best available provider based on env vars, OAuth, and CLI credentials.
+ * Returns null if no provider is available.
+ */
+export function detectProvider(): ProviderConfig | null {
+  const preferred = process.env.PREFERRED_PROVIDER as ProviderName | undefined;
+  const available = collectAvailableProviders();
+
   if (available.length === 0) return null;
 
-  // If preferred provider is set and available, use it
   if (preferred) {
     const match = available.find(a => a.provider === preferred);
     if (match) return match;
   }
 
-  // Default: first available (priority order: anthropic > openai > openrouter)
   return available[0];
 }
 
@@ -154,75 +207,36 @@ export function detectProvider(): ProviderConfig | null {
  */
 export function resolveProviderChain(): ProviderConfig[] {
   const preferred = process.env.PREFERRED_PROVIDER as ProviderName | undefined;
-  const all: ProviderConfig[] = [];
+  const available = collectAvailableProviders();
+  const chain: ProviderConfig[] = [];
   const seen = new Set<ProviderName>();
 
   const add = (config: ProviderConfig) => {
     if (seen.has(config.provider)) return;
     seen.add(config.provider);
-    all.push(config);
+    chain.push(config);
   };
 
-  // Collect all available
-  const available: ProviderConfig[] = [];
-
-  if (process.env.ANTHROPIC_API_KEY) {
-    available.push({
-      provider: 'anthropic',
-      apiKey: process.env.ANTHROPIC_API_KEY,
-      source: 'env',
-      model: process.env.ANTHROPIC_MODEL ?? DEFAULT_MODELS.anthropic,
-    });
-  }
-
-  if (process.env.OPENAI_API_KEY) {
-    available.push({
-      provider: 'openai',
-      apiKey: process.env.OPENAI_API_KEY,
-      source: 'env',
-      model: process.env.OPENAI_MODEL ?? DEFAULT_MODELS.openai,
-    });
-  }
-
-  const codexToken = readCodexCliCreds();
-  if (codexToken && !available.some(a => a.provider === 'openai')) {
-    available.push({
-      provider: 'openai',
-      apiKey: codexToken,
-      source: 'codex-cli',
-      model: process.env.OPENAI_MODEL ?? DEFAULT_MODELS.openai,
-    });
-  }
-
-  if (process.env.OPENROUTER_API_KEY) {
-    available.push({
-      provider: 'openrouter',
-      apiKey: process.env.OPENROUTER_API_KEY,
-      source: 'env',
-      model: process.env.OPENROUTER_MODEL ?? DEFAULT_MODELS.openrouter,
-    });
-  }
-
-  // Preferred first
   if (preferred) {
     const match = available.find(a => a.provider === preferred);
     if (match) add(match);
   }
 
-  // Then rest in priority order
   for (const config of available) {
     add(config);
   }
 
-  return all;
+  return chain;
 }
 
 /**
  * Format provider info for logging.
  */
 export function formatProviderInfo(config: ProviderConfig): string {
-  const sourceLabel = config.source === 'env'
-    ? 'API key'
-    : 'Codex CLI';
-  return `${config.provider} (${sourceLabel}) → ${config.model}`;
+  const sourceLabels: Record<CredentialSource, string> = {
+    'env': 'API key',
+    'codex-cli': 'Codex CLI',
+    'pi-ai-oauth': 'OAuth subscription',
+  };
+  return `${config.provider} (${sourceLabels[config.source]}) → ${config.model}`;
 }
