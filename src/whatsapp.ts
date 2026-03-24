@@ -31,12 +31,12 @@ interface HistoryEntry {
   content: string;
 }
 
-/** Check if the primary provider is premium (OAuth or API key) */
+/** Check if the primary provider is premium (paid API key, not OpenRouter free) */
 function isPremiumProvider(): boolean {
   const chain = resolveProviderChain();
   if (chain.length === 0) return false;
   const primary = chain[0];
-  return primary.source === 'pi-ai-oauth' || primary.source === 'env';
+  return primary.provider !== 'openrouter';
 }
 
 function getMaxHistory(): number {
