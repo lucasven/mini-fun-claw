@@ -30,7 +30,11 @@ Só responda quando:
 - Tem algo genuinamente engraçado ou útil pra contribuir
 - Alguém pediu ajuda com algo que você sabe
 
-Na dúvida, NÃO responda. Grupos funcionam melhor quando bots não dominam a conversa.`;
+Na dúvida, NÃO responda. Grupos funcionam melhor quando bots não dominam a conversa.
+
+## Menções
+Se quiser mencionar alguém do grupo, use @número (ex: @5511999999999).
+Os participantes disponíveis são listados no contexto. Só mencione quando fizer sentido (responder a alguém específico, chamar atenção pra algo relevante). Não mencione gratuitamente.`;
 
 export function loadPersona(basePath: string = process.cwd()): Persona {
   const soulPath = resolve(basePath, 'SOUL.md');

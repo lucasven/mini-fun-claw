@@ -19,6 +19,69 @@ const MAX_HISTORY = 15;
 /** In-memory conversation history per group */
 const groupHistory = new Map<string, Array<{ role: 'user' | 'assistant'; name?: string; content: string }>>();
 
+/** In-memory participant map per group: displayName → JID */
+const groupParticipants = new Map<string, Map<string, string>>();
+
+/** Normalize JID to phone number (strip device suffix + domain) */
+function jidToNumber(jid: string): string {
+  return jid.split('@')[0].split(':')[0];
+}
+
+/** Track a participant from an incoming message */
+function trackParticipant(groupJid: string, participantJid: string, pushName?: string): void {
+  if (!groupParticipants.has(groupJid)) {
+    groupParticipants.set(groupJid, new Map());
+  }
+  const map = groupParticipants.get(groupJid)!;
+  const number = jidToNumber(participantJid);
+  // Use pushName if available, otherwise use number
+  const name = pushName?.trim() || number;
+  map.set(name, `${number}@s.whatsapp.net`);
+}
+
+/** Load group participants via groupMetadata (called once on first message per group) */
+async function loadGroupParticipants(sock: WASocket, groupJid: string): Promise<void> {
+  if (groupParticipants.has(groupJid)) return;
+  try {
+    const metadata = await sock.groupMetadata(groupJid);
+    groupParticipants.set(groupJid, new Map());
+    const map = groupParticipants.get(groupJid)!;
+    for (const p of metadata.participants) {
+      const number = jidToNumber(p.id);
+      map.set(number, p.id); // initial: number → JID (pushName not available here)
+    }
+  } catch {
+    // Non-fatal — participants will be learned from messages
+  }
+}
+
+/** Build participant context string for the LLM system prompt */
+function getParticipantContext(groupJid: string, botJid?: string): string {
+  const map = groupParticipants.get(groupJid);
+  if (!map || map.size === 0) return '';
+
+  const botNumber = botJid ? jidToNumber(botJid) : '';
+  const entries: string[] = [];
+  for (const [name, jid] of map) {
+    const number = jidToNumber(jid);
+    if (number === botNumber) continue; // exclude self
+    entries.push(`- ${name}: @${number}`);
+  }
+  if (entries.length === 0) return '';
+  return `\n\nParticipantes do grupo:\n${entries.join('\n')}\n\nPara mencionar alguém, use @número no seu texto (ex: @${jidToNumber(entries[0]?.split('@')[1] || '5511999999999')}).`;
+}
+
+/** Parse @mentions from LLM response text and return mentions array */
+function extractMentions(text: string): string[] {
+  const mentionRegex = /@(\d{10,15})/g;
+  const mentions: string[] = [];
+  let match;
+  while ((match = mentionRegex.exec(text)) !== null) {
+    mentions.push(`${match[1]}@s.whatsapp.net`);
+  }
+  return mentions;
+}
+
 function pushHistory(groupJid: string, role: 'user' | 'assistant', content: string, name?: string): void {
   if (!groupHistory.has(groupJid)) {
     groupHistory.set(groupJid, []);
@@ -188,6 +251,16 @@ async function handleMessage(
   // Ignore non-whitelisted groups
   if (!isGroupAllowed(jid, config.groupWhitelist)) return;
 
+  // Load group participants on first message (non-blocking)
+  await loadGroupParticipants(sock, jid);
+
+  // Track sender from every message (learns pushNames over time)
+  const senderJid = msg.key.participant || msg.key.remoteJid || '';
+  const pushName = (msg as any).pushName as string | undefined;
+  if (senderJid) {
+    trackParticipant(jid, senderJid, pushName);
+  }
+
   // Extract text
   const text = extractText(msg);
   if (!text) return;
@@ -196,7 +269,7 @@ async function handleMessage(
   const { respond, cleanText } = shouldRespond(text, config.botPrefix);
   if (!respond || !cleanText) return;
 
-  const senderName = (msg.key.participant ?? 'unknown').replace(/@.*/, '');
+  const senderName = pushName || jidToNumber(senderJid);
   console.log(`📩 [${jid}] ${senderName}: ${cleanText.slice(0, 100)}`);
 
   // Save user message to conversation history (always, even if we skip)
@@ -221,10 +294,14 @@ async function handleMessage(
   // Get conversation history for context
   const history = getHistory(jid);
 
+  // Inject participant context into system prompt
+  const participantContext = getParticipantContext(jid, botJid);
+  const enrichedPrompt = participantContext ? systemPrompt + participantContext : systemPrompt;
+
   // Get LLM response with conversation history
   const response = await chat({
     apiKey: config.openrouterApiKey,
-    systemPrompt,
+    systemPrompt: enrichedPrompt,
     userMessage: cleanText,
     history,
   });
@@ -247,11 +324,18 @@ async function handleMessage(
 
   console.log(`🤖 [${response.model}] ${response.content.slice(0, 100)}`);
 
+  // Extract @mentions from the response
+  const mentions = extractMentions(response.content);
+  const messagePayload: { text: string; mentions?: string[] } = { text: response.content };
+  if (mentions.length > 0) {
+    messagePayload.mentions = mentions;
+  }
+
   // Send response — only quote the original message if it was directed at the bot
   // This prevents the bot from always replying with quote, which makes it look less spammy
   if (directedAtBot) {
-    await sock.sendMessage(jid, { text: response.content }, { quoted: msg as never });
+    await sock.sendMessage(jid, messagePayload, { quoted: msg as never });
   } else {
-    await sock.sendMessage(jid, { text: response.content });
+    await sock.sendMessage(jid, messagePayload);
   }
 }
