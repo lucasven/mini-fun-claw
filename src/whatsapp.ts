@@ -12,12 +12,51 @@ import type { Config } from './types.js';
 import { isGroupAllowed, isGroupMessage, shouldRespond } from './config.js';
 import { buildSystemPrompt, loadPersona } from './persona.js';
 import { chat } from './llm.js';
+import { resolveProviderChain } from './provider.js';
 
 const AUTH_DIR = 'auth_state';
-const MAX_HISTORY = 15;
+
+// ─── Context management ─────────────────────────────────────
+
+const COMPACT_THRESHOLD = 50;  // trigger compaction at 50 msgs
+const KEEP_RECENT = 40;        // keep 40 most recent msgs after compaction
+const MAX_HISTORY_FREE = 15;   // free tier: small buffer
+const MAX_HISTORY_PREMIUM = 100; // premium: large buffer (compaction handles the rest)
+const MAX_CONTEXT_TOKENS_FREE = 2000;
+const MAX_CONTEXT_TOKENS_PREMIUM = 8000;
+
+interface HistoryEntry {
+  role: 'user' | 'assistant';
+  name?: string;
+  content: string;
+}
+
+/** Check if the primary provider is premium (OAuth or API key) */
+function isPremiumProvider(): boolean {
+  const chain = resolveProviderChain();
+  if (chain.length === 0) return false;
+  const primary = chain[0];
+  return primary.source === 'pi-ai-oauth' || primary.source === 'env';
+}
+
+function getMaxHistory(): number {
+  return isPremiumProvider() ? MAX_HISTORY_PREMIUM : MAX_HISTORY_FREE;
+}
+
+function getMaxContextTokens(): number {
+  return isPremiumProvider() ? MAX_CONTEXT_TOKENS_PREMIUM : MAX_CONTEXT_TOKENS_FREE;
+}
+
+/** Estimate token count (~4 chars = 1 token for pt-BR/en) */
+function estimateTokens(messages: HistoryEntry[]): number {
+  return messages.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 0);
+}
 
 /** In-memory conversation history per group */
-const groupHistory = new Map<string, Array<{ role: 'user' | 'assistant'; name?: string; content: string }>>();
+const groupHistory = new Map<string, HistoryEntry[]>();
+
+/** Track if compaction is in progress per group (prevent concurrent compaction) */
+const compactingGroups = new Set<string>();
 
 /** In-memory participant map per group: displayName → JID */
 const groupParticipants = new Map<string, Map<string, string>>();
@@ -88,14 +127,76 @@ function pushHistory(groupJid: string, role: 'user' | 'assistant', content: stri
   }
   const history = groupHistory.get(groupJid)!;
   history.push({ role, content, ...(name ? { name } : {}) });
-  // Keep only the last MAX_HISTORY messages
-  while (history.length > MAX_HISTORY) {
+
+  const maxHistory = getMaxHistory();
+  while (history.length > maxHistory) {
     history.shift();
   }
 }
 
-function getHistory(groupJid: string): Array<{ role: 'user' | 'assistant'; name?: string; content: string }> {
-  return groupHistory.get(groupJid) ?? [];
+function getHistory(groupJid: string): HistoryEntry[] {
+  const history = groupHistory.get(groupJid) ?? [];
+
+  // Token-based truncation: remove oldest msgs until we fit
+  const maxTokens = getMaxContextTokens();
+  const result = [...history];
+  while (result.length > 1 && estimateTokens(result) > maxTokens) {
+    result.shift();
+  }
+  return result;
+}
+
+/**
+ * Compact conversation history by summarizing old messages.
+ * Only runs for premium providers (OAuth/API key).
+ * Triggers at COMPACT_THRESHOLD msgs, keeps KEEP_RECENT, summarizes the rest.
+ */
+async function compactHistory(
+  groupJid: string,
+  config: Config,
+): Promise<void> {
+  // Only compact for premium providers
+  if (!isPremiumProvider()) return;
+
+  const history = groupHistory.get(groupJid);
+  if (!history || history.length < COMPACT_THRESHOLD) return;
+
+  // Prevent concurrent compaction for same group
+  if (compactingGroups.has(groupJid)) return;
+  compactingGroups.add(groupJid);
+
+  try {
+    const toSummarize = history.slice(0, history.length - KEEP_RECENT);
+    const toKeep = history.slice(-KEEP_RECENT);
+
+    // Build conversation text for summarization
+    const conversationText = toSummarize
+      .map(m => `${m.name || m.role}: ${m.content}`)
+      .join('\n');
+
+    const summary = await chat({
+      apiKey: config.openrouterApiKey,
+      systemPrompt: 'Resuma esta conversa de grupo em 2-3 frases curtas. Inclua quem disse o quê e os tópicos principais. Responda APENAS com o resumo, nada mais.',
+      userMessage: conversationText,
+    });
+
+    if (summary?.content && summary.content.trim() !== '[SKIP]') {
+      groupHistory.set(groupJid, [
+        { role: 'user', content: `[Contexto anterior: ${summary.content.trim()}]` },
+        ...toKeep,
+      ]);
+      console.log(`📦 [${groupJid}] Compacted ${toSummarize.length} msgs → summary + ${toKeep.length} recent`);
+    }
+    // If summarization fails, just truncate without summary
+    else {
+      groupHistory.set(groupJid, toKeep);
+      console.log(`📦 [${groupJid}] Truncated ${toSummarize.length} old msgs (summary failed)`);
+    }
+  } catch (err) {
+    console.warn(`⚠️  Compaction failed for ${groupJid}: ${err instanceof Error ? err.message : err}`);
+  } finally {
+    compactingGroups.delete(groupJid);
+  }
 }
 
 export async function startBot(config: Config): Promise<void> {
@@ -274,6 +375,9 @@ async function handleMessage(
 
   // Save user message to conversation history (always, even if we skip)
   pushHistory(jid, 'user', cleanText, senderName);
+
+  // Compact history if threshold reached (async, non-blocking)
+  compactHistory(jid, config).catch(() => {});
 
   // Bypass random gate if message is directed at the bot (reply or mention)
   const repliedToBot = isReplyToBot(msg, botJid);
